@@ -2,7 +2,13 @@ import os
 import requests
 import json
 
-def get_gold_review():
+def get_gold_price():
+    url = "https://api.metals.live/v1/spot/gold"
+    response = requests.get(url)
+    data = response.json()
+    return data[0]["price"]
+
+def get_gold_review(price):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
@@ -12,12 +18,11 @@ def get_gold_review():
         "model": "llama-3.3-70b-versatile",
         "messages": [{
             "role": "user",
-            "content": "כתוב סקירה יומית מקיפה על זהב בעברית הכוללת: מחיר נוכחי, גורמים גיאופוליטיים, ותחזית קצרה. השתמש באימוג'ים. הסקירה תהיה מקצועית וקצרה."
+            "content": f"כתוב סקירה יומית מקיפה על זהב בעברית. המחיר האמיתי של זהב היום הוא ${price} לאונקיה. כלול: מחיר נוכחי, גורמים גיאופוליטיים, ותחזית קצרה. השתמש באימוג'ים. הסקירה תהיה מקצועית וקצרה."
         }]
     }
     response = requests.post(url, headers=headers, json=data)
     result = response.json()
-    print("Groq response:", json.dumps(result, ensure_ascii=False))
     return result["choices"][0]["message"]["content"]
 
 def send_to_telegram(message):
@@ -31,6 +36,8 @@ def send_to_telegram(message):
     print("Telegram response:", response.json())
 
 if __name__ == "__main__":
-    review = get_gold_review()
+    price = get_gold_price()
+    print(f"מחיר זהב: ${price}")
+    review = get_gold_review(price)
     send_to_telegram(review)
     print("נשלח בהצלחה!")

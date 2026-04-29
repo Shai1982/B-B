@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 
 def get_gold_review():
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -15,17 +16,19 @@ def get_gold_review():
         }]
     }
     response = requests.post(url, headers=headers, json=data)
-    return response.json()["choices"][0]["message"]["content"]
+    result = response.json()
+    print("Groq response:", json.dumps(result, ensure_ascii=False))
+    return result["choices"][0]["message"]["content"]
 
 def send_to_telegram(message):
     token = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    requests.post(url, json={
+    response = requests.post(url, json={
         "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "HTML"
+        "text": message
     })
+    print("Telegram response:", response.json())
 
 if __name__ == "__main__":
     review = get_gold_review()

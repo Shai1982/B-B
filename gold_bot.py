@@ -9,7 +9,7 @@ def get_gold_review():
         "Content-Type": "application/json"
     }
     data = {
-        "model": "llama3-70b-8192",
+        "model": "llama-3.3-70b-versatile",
         "messages": [{
             "role": "user",
             "content": "כתוב סקירה יומית מקיפה על זהב בעברית הכוללת: מחיר נוכחי, גורמים גיאופוליטיים, ותחזית קצרה. השתמש באימוג'ים. הסקירה תהיה מקצועית וקצרה."

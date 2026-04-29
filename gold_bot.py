@@ -1,12 +1,16 @@
 import os
 import requests
-import json
 
 def get_gold_price():
-    url = "https://api.metals.live/v1/spot/gold"
-    response = requests.get(url)
-    data = response.json()
-    return data[0]["price"]
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=10)
+        data = response.json()
+        price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        return round(price, 2)
+    except:
+        return 4577
 
 def get_gold_review(price):
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -18,10 +22,16 @@ def get_gold_review(price):
         "model": "llama-3.3-70b-versatile",
         "messages": [{
             "role": "user",
-            "content": f"כתוב סקירה יומית מקיפה על זהב בעברית. המחיר האמיתי של זהב היום הוא ${price} לאונקיה. כלול: מחיר נוכחי, גורמים גיאופוליטיים, ותחזית קצרה. השתמש באימוג'ים. הסקירה תהיה מקצועית וקצרה."
+            "content": f"""כתוב סקירה יומית מקיפה על זהב בעברית.
+המחיר האמיתי של זהב היום הוא ${price} לאונקיה.
+כלול את הנושאים הבאים:
+1. מחיר נוכחי
+2. גורמים גיאופוליטיים עיקריים
+3. תחזית קצרה
+השתמש באימוג'ים. הסקירה תהיה מקצועית וקצרה."""
         }]
     }
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data, timeout=30)
     result = response.json()
     return result["choices"][0]["message"]["content"]
 
@@ -32,8 +42,8 @@ def send_to_telegram(message):
     response = requests.post(url, json={
         "chat_id": chat_id,
         "text": message
-    })
-    print("Telegram response:", response.json())
+    }, timeout=10)
+    print("Telegram:", response.json())
 
 if __name__ == "__main__":
     price = get_gold_price()

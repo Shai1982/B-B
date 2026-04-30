@@ -1,5 +1,12 @@
 import os
 import requests
+import pandas as pd
+import numpy as np
+from io import StringIO
+import zipfile, io
+from datetime import datetime
+
+GOLD_MARKET_CODE = "088691"
 
 def get_gold_price():
     try:
@@ -9,45 +16,30 @@ def get_gold_price():
         data = response.json()
         price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
         return round(price, 2)
-    except:
-        return 4577
+    except Exception as e:
+        print(f"שגיאה בזהב: {e}")
+        return None
 
-def get_gold_review(price):
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [{
-            "role": "user",
-            "content": f"""כתוב סקירה יומית מקיפה על זהב בעברית.
-המחיר האמיתי של זהב היום הוא ${price} לאונקיה.
-כלול את הנושאים הבאים:
-1. מחיר נוכחי
-2. גורמים גיאופוליטיים עיקריים
-3. תחזית קצרה
-השתמש באימוג'ים. הסקירה תהיה מקצועית וקצרה."""
-        }]
-    }
-    response = requests.post(url, headers=headers, json=data, timeout=30)
-    result = response.json()
-    return result["choices"][0]["message"]["content"]
+def get_crypto_prices():
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": "bitcoin,ethereum",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true"
+        }
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        btc = round(data["bitcoin"]["usd"], 2)
+        btc_change = round(data["bitcoin"]["usd_24h_change"], 2)
+        eth = round(data["ethereum"]["usd"], 2)
+        eth_change = round(data["ethereum"]["usd_24h_change"], 2)
+        return btc, btc_change, eth, eth_change
+    except Exception as e:
+        print(f"שגיאה בקריפטו: {e}")
+        return None, None, None, None
 
-def send_to_telegram(message):
-    token = os.environ["TELEGRAM_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    response = requests.post(url, json={
-        "chat_id": chat_id,
-        "text": message
-    }, timeout=10)
-    print("Telegram:", response.json())
-
-if __name__ == "__main__":
-    price = get_gold_price()
-    print(f"מחיר זהב: ${price}")
-    review = get_gold_review(price)
-    send_to_telegram(review)
-    print("נשלח בהצלחה!")
+def get_fear_greed():
+    try:
+        url = "https://api.alternative.me/fng/"
+        response = requests.get(url, timeout=10)

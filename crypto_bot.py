@@ -16,25 +16,55 @@ def get_hebrew_date():
     now = datetime.now()
     return f"{days[now.weekday()]} | {now.day} {months[now.month]} {now.year}"
 
-def get_bybit_data(symbol):
+def get_crypto_prices():
     try:
-        url = "https://api.bybit.com/v5/market/tickers"
-        params = {"category": "linear", "symbol": symbol}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        data = json.loads(response.text)
-        ticker = data["result"]["list"][0]
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": "bitcoin,ethereum",
+            "vs_currencies": "usd",
+            "include_24hr_change": "true",
+            "include_24hr_vol": "true",
+            "include_last_updated_at": "true"
+        }
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
         return {
-            "price": float(ticker["lastPrice"]),
-            "change": float(ticker["price24hPcnt"]) * 100,
-            "high": float(ticker["highPrice24h"]),
-            "low": float(ticker["lowPrice24h"]),
-            "volume": float(ticker["volume24h"]),
-            "funding_rate": float(ticker["fundingRate"]) * 100,
-            "open_interest": float(ticker["openInterest"])
+            "btc_price": round(data["bitcoin"]["usd"], 2),
+            "btc_change": round(data["bitcoin"]["usd_24h_change"], 2),
+            "btc_volume": round(data["bitcoin"]["usd_24h_vol"], 0),
+            "eth_price": round(data["ethereum"]["usd"], 2),
+            "eth_change": round(data["ethereum"]["usd_24h_change"], 2),
+            "eth_volume": round(data["ethereum"]["usd_24h_vol"], 0)
         }
     except Exception as e:
-        print(f"שגיאה ב-Bybit {symbol}: {e}")
+        print(f"שגיאה ב-CoinGecko: {e}")
+        return None
+
+def get_binance_data(symbol):
+    try:
+        # מחיר גבוה/נמוך
+        ticker_url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}"
+        ticker = requests.get(ticker_url, timeout=10).json()
+
+        # Funding Rate
+        funding_url = f"https://fapi.binance.com/fapi/v1/fundingRate?symbol={symbol}&limit=1"
+        funding = requests.get(funding_url, timeout=10).json()
+
+        # Open Interest
+        oi_url = f"https://fapi.binance.com/fapi/v1/openInterest?symbol={symbol}"
+        oi = requests.get(oi_url, timeout=10).json()
+
+        funding_rate = float(funding[0]["fundingRate"]) * 100
+
+        return {
+            "high": float(ticker["highPrice"]),
+            "low": float(ticker["lowPrice"]),
+            "funding_rate": funding_rate,
+            "funding_sentiment": "שורי 🟢" if funding_rate > 0 else "דובי 🔴",
+            "open_interest": float(oi["openInterest"])
+        }
+    except Exception as e:
+        print(f"שגיאה ב-Binance {symbol}: {e}")
         return None
 
 def get_fear_greed():
@@ -48,55 +78,55 @@ def get_fear_greed():
     except:
         return None, None
 
-def get_review(btc, eth, fear, fear_label):
+def get_review(prices, btc_data, eth_data, fear, fear_label):
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
         "Content-Type": "application/json"
     }
 
-    btc_arrow = "📈" if btc["change"] > 0 else "📉"
-    eth_arrow = "📈" if eth["change"] > 0 else "📉"
+    btc_arrow = "📈" if prices["btc_change"] > 0 else "📉"
+    eth_arrow = "📈" if prices["eth_change"] > 0 else "📉"
     fear_emoji = "😱" if int(fear) < 25 else "😰" if int(fear) < 50 else "😊" if int(fear) < 75 else "🤑"
-    btc_funding = "שורי 🟢" if btc["funding_rate"] > 0 else "דובי 🔴"
-    eth_funding = "שורי 🟢" if eth["funding_rate"] > 0 else "דובי 🔴"
     hebrew_date = get_hebrew_date()
 
     prompt = f"""אתה אנליסט קריפטו בכיר.
 כתוב סקירת קריפטו מקצועית בעברית בלבד לסוחרים.
 השתמש בפורמט Markdown של טלגרם: *מודגש* לכותרות וערכים חשובים, _נטוי_ להערות.
 
-נתונים אמיתיים מ-Bybit:
-ביטקוין: ${btc['price']:,.2f} | שינוי: {btc['change']:.2f}% {btc_arrow}
-BTC גבוה יומי: ${btc['high']:,.2f} | נמוך יומי: ${btc['low']:,.2f}
-BTC נפח 24ש: {btc['volume']:,.0f} | Open Interest: {btc['open_interest']:,.0f}
-BTC Funding Rate: {btc['funding_rate']:.4f}% — {btc_funding}
+נתונים אמיתיים:
+ביטקוין: ${prices['btc_price']:,.2f} | שינוי: {prices['btc_change']:.2f}% {btc_arrow}
+BTC גבוה יומי: ${btc_data['high']:,.2f} | נמוך יומי: ${btc_data['low']:,.2f}
+BTC נפח 24ש: ${prices['btc_volume']:,.0f}
+BTC Funding Rate: {btc_data['funding_rate']:.4f}% — {btc_data['funding_sentiment']}
+BTC Open Interest: {btc_data['open_interest']:,.0f}
 
-איתריום: ${eth['price']:,.2f} | שינוי: {eth['change']:.2f}% {eth_arrow}
-ETH גבוה יומי: ${eth['high']:,.2f} | נמוך יומי: ${eth['low']:,.2f}
-ETH נפח 24ש: {eth['volume']:,.0f} | Open Interest: {eth['open_interest']:,.0f}
-ETH Funding Rate: {eth['funding_rate']:.4f}% — {eth_funding}
+איתריום: ${prices['eth_price']:,.2f} | שינוי: {prices['eth_change']:.2f}% {eth_arrow}
+ETH גבוה יומי: ${eth_data['high']:,.2f} | נמוך יומי: ${eth_data['low']:,.2f}
+ETH נפח 24ש: ${prices['eth_volume']:,.0f}
+ETH Funding Rate: {eth_data['funding_rate']:.4f}% — {eth_data['funding_sentiment']}
+ETH Open Interest: {eth_data['open_interest']:,.0f}
 
 מדד פחד/חמדנות: {fear}/100 {fear_emoji} ({fear_label})
 
 כתוב לפי המבנה הבא בדיוק:
 
-🔷 *סקירת קריפטו — Bybit Live*
+🔷 *סקירת קריפטו — Live*
 📅 {hebrew_date}
 ━━━━━━━━━━━━━━━
 
 📊 *נתוני שוק בזמן אמת*
-₿ *ביטקוין:* ${btc['price']:,.2f} ({btc['change']:.2f}% {btc_arrow})
-📊 גבוה: *${btc['high']:,.2f}* | נמוך: *${btc['low']:,.2f}*
-💰 נפח 24ש: *{btc['volume']:,.0f}*
-📌 Funding Rate: *{btc['funding_rate']:.4f}%* — {btc_funding}
-📌 Open Interest: *{btc['open_interest']:,.0f}*
+₿ *ביטקוין:* ${prices['btc_price']:,.2f} ({prices['btc_change']:.2f}% {btc_arrow})
+📊 גבוה: *${btc_data['high']:,.2f}* | נמוך: *${btc_data['low']:,.2f}*
+💰 נפח 24ש: *${prices['btc_volume']:,.0f}*
+📌 Funding Rate: *{btc_data['funding_rate']:.4f}%* — {btc_data['funding_sentiment']}
+📌 Open Interest: *{btc_data['open_interest']:,.0f}*
 
-🔷 *איתריום:* ${eth['price']:,.2f} ({eth['change']:.2f}% {eth_arrow})
-📊 גבוה: *${eth['high']:,.2f}* | נמוך: *${eth['low']:,.2f}*
-💰 נפח 24ש: *{eth['volume']:,.0f}*
-📌 Funding Rate: *{eth['funding_rate']:.4f}%* — {eth_funding}
-📌 Open Interest: *{eth['open_interest']:,.0f}*
+🔷 *איתריום:* ${prices['eth_price']:,.2f} ({prices['eth_change']:.2f}% {eth_arrow})
+📊 גבוה: *${eth_data['high']:,.2f}* | נמוך: *${eth_data['low']:,.2f}*
+💰 נפח 24ש: *${prices['eth_volume']:,.0f}*
+📌 Funding Rate: *{eth_data['funding_rate']:.4f}%* — {eth_data['funding_sentiment']}
+📌 Open Interest: *{eth_data['open_interest']:,.0f}*
 
 {fear_emoji} *פחד/חמדנות:* {fear}/100 — {fear_label}
 ━━━━━━━━━━━━━━━
@@ -147,13 +177,14 @@ def send_to_telegram(message):
     print("Telegram:", response.json())
 
 if __name__ == "__main__":
-    btc = get_bybit_data("BTCUSDT")
-    eth = get_bybit_data("ETHUSDT")
+    prices = get_crypto_prices()
+    btc_data = get_binance_data("BTCUSDT")
+    eth_data = get_binance_data("ETHUSDT")
     fear, fear_label = get_fear_greed()
 
-    if not btc or not eth or not fear:
+    if not prices or not btc_data or not eth_data or not fear:
         print("חסרים נתונים — לא נשלח כלום")
     else:
-        review = get_review(btc, eth, fear, fear_label)
+        review = get_review(prices, btc_data, eth_data, fear, fear_label)
         send_to_telegram(review)
         print("נשלח בהצלחה!")

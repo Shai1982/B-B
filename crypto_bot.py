@@ -28,10 +28,8 @@ def get_crypto_data():
         }
         response = requests.get(url, params=params, timeout=15)
         data = response.json()
-        
         btc = next(x for x in data if x["id"] == "bitcoin")
         eth = next(x for x in data if x["id"] == "ethereum")
-        
         return {
             "btc_price": round(btc["current_price"], 2),
             "btc_change": round(btc["price_change_percentage_24h"], 2),
@@ -75,7 +73,8 @@ def get_review(d, fear, fear_label):
 
     prompt = f"""אתה אנליסט קריפטו בכיר.
 כתוב סקירת קריפטו מקצועית בעברית בלבד לסוחרים.
-השתמש בפורמט Markdown של טלגרם: *מודגש* לכותרות וערכים חשובים, _נטוי_ להערות.
+חשוב מאוד: אל תשתמש בשום סימן מיוחד כמו כוכביות, קווים תחתונים או backticks.
+השתמש רק באימוג'ים לעיצוב.
 
 נתונים אמיתיים:
 ביטקוין: ${d['btc_price']:,.2f} | שינוי: {d['btc_change']:.2f}% {btc_arrow}
@@ -90,40 +89,40 @@ ETH שווי שוק: ${d['eth_market_cap']:,.0f}
 
 מדד פחד/חמדנות: {fear}/100 {fear_emoji} ({fear_label})
 
-כתוב לפי המבנה הבא בדיוק:
+כתוב לפי המבנה הבא:
 
-🔷 *סקירת קריפטו — Live*
+🔷 סקירת קריפטו — Live
 📅 {hebrew_date}
 ━━━━━━━━━━━━━━━
 
-📊 *נתוני שוק בזמן אמת*
-₿ *ביטקוין:* ${d['btc_price']:,.2f} ({d['btc_change']:.2f}% {btc_arrow})
-📊 גבוה: *${d['btc_high']:,.2f}* | נמוך: *${d['btc_low']:,.2f}*
-💰 נפח 24ש: *${d['btc_volume']:,.0f}*
-🏦 שווי שוק: *${d['btc_market_cap']:,.0f}*
+📊 נתוני שוק בזמן אמת
+₿ ביטקוין: ${d['btc_price']:,.2f} ({d['btc_change']:.2f}% {btc_arrow})
+📊 גבוה: ${d['btc_high']:,.2f} | נמוך: ${d['btc_low']:,.2f}
+💰 נפח 24ש: ${d['btc_volume']:,.0f}
+🏦 שווי שוק: ${d['btc_market_cap']:,.0f}
 
-🔷 *איתריום:* ${d['eth_price']:,.2f} ({d['eth_change']:.2f}% {eth_arrow})
-📊 גבוה: *${d['eth_high']:,.2f}* | נמוך: *${d['eth_low']:,.2f}*
-💰 נפח 24ש: *${d['eth_volume']:,.0f}*
-🏦 שווי שוק: *${d['eth_market_cap']:,.0f}*
+🔷 איתריום: ${d['eth_price']:,.2f} ({d['eth_change']:.2f}% {eth_arrow})
+📊 גבוה: ${d['eth_high']:,.2f} | נמוך: ${d['eth_low']:,.2f}
+💰 נפח 24ש: ${d['eth_volume']:,.0f}
+🏦 שווי שוק: ${d['eth_market_cap']:,.0f}
 
-{fear_emoji} *פחד/חמדנות:* {fear}/100 — {fear_label}
+{fear_emoji} פחד/חמדנות: {fear}/100 — {fear_label}
 ━━━━━━━━━━━━━━━
 
-🌍 *ניתוח סנטימנט*
+🌍 ניתוח סנטימנט
 נתח את מדד הפחד/חמדנות ונפחי המסחר ומה הם מסמנים.
 ━━━━━━━━━━━━━━━
 
-📈 *ניתוח טכני*
+📈 ניתוח טכני
 ₿ ביטקוין: מגמה, תמיכה, התנגדות
 🔷 איתריום: מגמה, תמיכה, התנגדות
 ━━━━━━━━━━━━━━━
 
-🔮 *תחזית*
+🔮 תחזית
 כיוון צפוי לכל נכס עם רמות מחיר ספציפיות.
 ━━━━━━━━━━━━━━━
 
-✅ *המלצה לסוחר*
+✅ המלצה לסוחר
 קנייה / המתנה / מכירה לכל נכס עם הסבר תמציתי.
 
 כתוב בצורה מקצועית עם נתונים ספציפיים. אל תוסיף חתימה בסוף."""
@@ -138,9 +137,9 @@ ETH שווי שוק: ${d['eth_market_cap']:,.0f}
 
     signature = """
 ━━━━━━━━━━━━━━━
-🏢 *קבוצת B&B*
+🏢 קבוצת B&B
 📊 סקירת קריפטו יומית מקצועית
-⚠️ _האמור אינו מהווה ייעוץ השקעות_"""
+⚠️ האמור אינו מהווה ייעוץ השקעות"""
 
     return review + signature
 
@@ -148,10 +147,10 @@ def send_to_telegram(message):
     token = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    message = message.replace("*", "").replace("_", "").replace("`", "")
     response = requests.post(url, json={
         "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
+        "text": message
     }, timeout=10)
     print("Telegram:", response.json())
 

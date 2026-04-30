@@ -1,6 +1,6 @@
-
 import os
 import requests
+import json
 from datetime import datetime
 
 def get_hebrew_date():
@@ -20,8 +20,9 @@ def get_bybit_data(symbol):
     try:
         url = "https://api.bybit.com/v5/market/tickers"
         params = {"category": "linear", "symbol": symbol}
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        data = json.loads(response.text)
         ticker = data["result"]["list"][0]
         return {
             "price": float(ticker["lastPrice"]),

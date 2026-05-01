@@ -3,12 +3,11 @@ name: Forex Bot
 on:
   schedule:
     - cron: '30 17 * * 6'
-    - cron: '0 * * * 1-6'
+    - cron: '0 * * * 0-5'
   workflow_dispatch:
 
 jobs:
   forex-scanner:
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 17 * * 6'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,13 +21,14 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: forex-events
           path: forex_events.json
           retention-days: 7
+        continue-on-error: true
 
   forex-reminder:
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 * * * 1-6'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

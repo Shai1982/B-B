@@ -2,7 +2,6 @@ import os
 import requests
 import json
 from datetime import datetime, timedelta
-from xml.etree import ElementTree as ET
 
 def get_hebrew_date(date):
     days = {
@@ -18,12 +17,10 @@ def get_hebrew_date(date):
 
 def fetch_forex_events():
     try:
-        url = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
+        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=15)
         data = response.json()
-        
-        # סנן רק אירועים עם השפעה גבוהה
         high_impact = [e for e in data if e.get("impact", "") == "High"]
         print(f"נמצאו {len(high_impact)} אירועים בעלי השפעה גבוהה")
         return high_impact
@@ -32,37 +29,44 @@ def fetch_forex_events():
         return None
 
 def get_next_week_events(events):
-    # מציאת ימי השבוע הבא (ראשון-שישי)
     today = datetime.now()
-    days_until_sunday = (6 - today.weekday()) % 7
-    if days_until_sunday == 0:
-        days_until_sunday = 7
-    next_sunday = today + timedelta(days=days_until_sunday)
+
+    # אם היום שבת — השבוע הבא מתחיל מחר (ראשון)
+    if today.weekday() == 5:
+        next_sunday = today + timedelta(days=1)
+    else:
+        days_until_sunday = (6 - today.weekday()) % 7
+        if days_until_sunday == 0:
+            days_until_sunday = 7
+        next_sunday = today + timedelta(days=days_until_sunday)
+
     next_friday = next_sunday + timedelta(days=5)
-    
+
     week_events = []
     for event in events:
         try:
-            event_date = datetime.strptime(event["date"], "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
+            event_date = datetime.strptime(
+                event["date"], "%Y-%m-%dT%H:%M:%S%z"
+            ).replace(tzinfo=None)
             if next_sunday.date() <= event_date.date() <= next_friday.date():
                 week_events.append(event)
         except:
             continue
-    
+
     return week_events, next_sunday, next_friday
 
 def analyze_events(events):
     if not events:
         return None
-    
+
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ['GROQ_API_KEY']}",
         "Content-Type": "application/json"
     }
-    
+
     events_text = json.dumps(events, ensure_ascii=False, indent=2)
-    
+
     prompt = f"""אתה אנליסט פורקס בכיר.
 קיבלת רשימת אירועים כלכליים לשבוע הבא.
 עבור כל אירוע כתוב ניתוח קצר ומקצועי.
@@ -83,7 +87,7 @@ def analyze_events(events):
 📈 נתון גבוה מהצפי: [השפעה על דולר/יורו/זהב]
 📉 נתון נמוך מהצפי: [השפעה על דולר/יורו/זהב]
 ➡️ ללא שינוי: [השפעה על דולר/יורו/זהב]
-⭐ חשיבות: [אם זה האירוע הכי חשוב של היום — ציין זאת]
+⭐ [אם זה האירוע הכי חשוב של היום — ציין זאת]
 
 כתוב בעברית בלבד. ללא כוכביות או markdown. קצר וקולע."""
 
@@ -107,11 +111,10 @@ def send_to_telegram(message):
     token = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    
-    # שלח בחלקים אם ההודעה ארוכה מדי
+
     max_length = 4000
     parts = [message[i:i+max_length] for i in range(0, len(message), max_length)]
-    
+
     for i, part in enumerate(parts):
         if i > 0:
             part = "המשך...\n\n" + part
@@ -124,18 +127,18 @@ def send_to_telegram(message):
 if __name__ == "__main__":
     print("סורק אירועים כלכליים...")
     events = fetch_forex_events()
-    
+
     if not events:
         print("לא נמצאו אירועים")
     else:
         week_events, next_sunday, next_friday = get_next_week_events(events)
-        
+
         if not week_events:
             print("אין אירועים גבוהי השפעה לשבוע הבא")
         else:
             print(f"נמצאו {len(week_events)} אירועים לשבוע הבא")
             save_events_for_reminders(week_events)
-            
+
             header = f"""📅 אירועים כלכליים חשובים
 שבוע {get_hebrew_date(next_sunday)} עד {get_hebrew_date(next_friday)}
 🔴 השפעה גבוהה בלבד
@@ -143,14 +146,14 @@ if __name__ == "__main__":
 
 """
             analysis = analyze_events(week_events)
-            
+
             signature = """
 
 ━━━━━━━━━━━━━━━
 🏢 קבוצת B&B
 📊 ניתוח אירועים כלכליים שבועי
 ⚠️ האמור אינו מהווה ייעוץ השקעות"""
-            
+
             full_message = header + analysis + signature
             send_to_telegram(full_message)
             print("נשלח בהצלחה!")

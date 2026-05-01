@@ -18,7 +18,7 @@ def get_hebrew_date(date):
 
 def fetch_forex_events():
     try:
-        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        url = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=15)
         data = response.json()

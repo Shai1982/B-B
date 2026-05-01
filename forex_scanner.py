@@ -17,21 +17,28 @@ def get_hebrew_date(date):
 
 def fetch_forex_events():
     try:
-        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers, timeout=15)
-        data = response.json()
-        high_impact = [e for e in data if e.get("impact", "") == "High"]
-        print(f"נמצאו {len(high_impact)} אירועים בעלי השפעה גבוהה")
-        return high_impact
+        all_events = []
+        for week in ["thisweek", "nextweek"]:
+            try:
+                url = f"https://nfs.faireconomy.media/ff_calendar_{week}.json"
+                headers = {"User-Agent": "Mozilla/5.0"}
+                response = requests.get(url, headers=headers, timeout=15)
+                if response.status_code == 200 and response.text.strip():
+                    data = response.json()
+                    high_impact = [e for e in data if e.get("impact", "") == "High"]
+                    all_events.extend(high_impact)
+                    print(f"✅ {week}: {len(high_impact)} אירועים גבוהים")
+            except Exception as e:
+                print(f"⚠️ {week}: {e}")
+        print(f"סה״כ: {len(all_events)} אירועים")
+        return all_events if all_events else None
     except Exception as e:
-        print(f"שגיאה בשליפת אירועים: {e}")
+        print(f"שגיאה: {e}")
         return None
 
 def get_next_week_events(events):
     today = datetime.now()
 
-    # אם היום שבת — השבוע הבא מתחיל מחר (ראשון)
     if today.weekday() == 5:
         next_sunday = today + timedelta(days=1)
     else:

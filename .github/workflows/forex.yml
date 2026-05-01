@@ -1,0 +1,51 @@
+name: Forex Bot
+
+on:
+  schedule:
+    # שבת בשעה 20:30 שעון ישראל = 17:30 UTC
+    - cron: '30 17 * * 6'
+    # כל יום ראשון-שישי כל שעה לבדיקת תזכורות
+    - cron: '0 * * * 1-6'
+  workflow_dispatch:
+
+jobs:
+  forex-scanner:
+    if: github.event_name == 'workflow_dispatch' || (github.event.schedule == '30 17 * * 6')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - run: pip install requests
+      - run: python forex_scanner.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: שמור אירועים
+        uses: actions/upload-artifact@v3
+        with:
+          name: forex-events
+          path: forex_events.json
+          retention-days: 7
+
+  forex-reminder:
+    if: github.event_name == 'workflow_dispatch' || (github.event.schedule == '0 * * * 1-6')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - run: pip install requests
+      - name: הורד אירועים
+        uses: actions/download-artifact@v3
+        with:
+          name: forex-events
+        continue-on-error: true
+      - run: python forex_reminder.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

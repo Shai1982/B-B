@@ -15,54 +15,44 @@ def get_hebrew_date(date):
     }
     return f"{days[date.weekday()]} | {date.day} {months[date.month]} {date.year}"
 
-def fetch_forex_events():
+def fetch_events(week="thisweek"):
     try:
-        all_events = []
-        for week in ["thisweek", "nextweek"]:
-            try:
-                url = f"https://nfs.faireconomy.media/ff_calendar_{week}.json"
-                headers = {"User-Agent": "Mozilla/5.0"}
-                response = requests.get(url, headers=headers, timeout=15)
-                if response.status_code == 200 and response.text.strip():
-                    data = response.json()
-                    high_impact = [e for e in data if e.get("impact", "") == "High"]
-                    all_events.extend(high_impact)
-                    print(f"✅ {week}: {len(high_impact)} אירועים גבוהים")
-            except Exception as e:
-                print(f"⚠️ {week}: {e}")
-        print(f"סה״כ: {len(all_events)} אירועים")
-        return all_events if all_events else None
+        url = f"https://nfs.faireconomy.media/ff_calendar_{week}.json"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code == 200 and response.text.strip():
+            data = response.json()
+            high_impact = [e for e in data if e.get("impact", "") == "High"]
+            print(f"✅ {week}: {len(high_impact)} אירועים גבוהים")
+            return high_impact
+        return []
     except Exception as e:
-        print(f"שגיאה: {e}")
+        print(f"⚠️ {week}: {e}")
+        return []
+
+def parse_date(date_str):
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
+    except:
         return None
 
-def get_next_week_events(events):
+def get_week_events():
     today = datetime.now()
-
-    if today.weekday() == 5:
-        next_sunday = today + timedelta(days=1)
-    else:
-        days_until_sunday = (6 - today.weekday()) % 7
-        if days_until_sunday == 0:
-            days_until_sunday = 7
-        next_sunday = today + timedelta(days=days_until_sunday)
-
+    # שבת — שאוב thisweek + nextweek וסנן לשבוע הבא
+    next_sunday = today + timedelta(days=1)
     next_friday = next_sunday + timedelta(days=5)
 
+    all_events = fetch_events("thisweek") + fetch_events("nextweek")
+
     week_events = []
-    for event in events:
-        try:
-            event_date = datetime.strptime(
-                event["date"], "%Y-%m-%dT%H:%M:%S%z"
-            ).replace(tzinfo=None)
-            if next_sunday.date() <= event_date.date() <= next_friday.date():
-                week_events.append(event)
-        except:
-            continue
+    for event in all_events:
+        event_date = parse_date(event["date"])
+        if event_date and next_sunday.date() <= event_date.date() <= next_friday.date():
+            week_events.append(event)
 
     return week_events, next_sunday, next_friday
 
-def analyze_events(events):
+def analyze_week_events(events):
     if not events:
         return None
 
@@ -76,27 +66,25 @@ def analyze_events(events):
 
     prompt = f"""אתה אנליסט פורקס בכיר.
 קיבלת רשימת אירועים כלכליים לשבוע הבא.
-עבור כל אירוע כתוב ניתוח קצר ומקצועי.
+כתוב ניתוח מקצועי בעברית בלבד.
 
 האירועים:
 {events_text}
 
-כתוב את הניתוח לפי המבנה הבא — חלק לפי ימים:
-
-עבור כל יום שיש בו אירועים כתוב:
+חלק לפי ימים. עבור כל יום:
 [שם היום ותאריך]
 ━━━━━━━━━━━━━━━
-עבור כל אירוע באותו יום:
+עבור כל אירוע:
 🕐 [שעה בשעון ישראל UTC+3]
 📌 [שם האירוע] — [מדינה/מטבע]
 📊 נוכחי: [ערך נוכחי] | צפי: [ערך צפוי]
-📝 [הסבר קצר מה זה האירוע]
-📈 נתון גבוה מהצפי: [השפעה על דולר/יורו/זהב]
-📉 נתון נמוך מהצפי: [השפעה על דולר/יורו/זהב]
+📝 [הסבר קצר מה זה]
+📈 גבוה מהצפי: [השפעה על דולר/יורו/זהב]
+📉 נמוך מהצפי: [השפעה על דולר/יורו/זהב]
 ➡️ ללא שינוי: [השפעה על דולר/יורו/זהב]
-⭐ [אם זה האירוע הכי חשוב של היום — ציין זאת]
+⭐ [אם זה הכי חשוב של היום — ציין]
 
-כתוב בעברית בלבד. ללא כוכביות או markdown. קצר וקולע."""
+ללא כוכביות או markdown. קצר וקולע."""
 
     data = {
         "model": "llama-3.3-70b-versatile",
@@ -106,11 +94,11 @@ def analyze_events(events):
     response = requests.post(url, headers=headers, json=data, timeout=30)
     return response.json()["choices"][0]["message"]["content"]
 
-def save_events_for_reminders(events):
+def save_events(events):
     try:
         with open("forex_events.json", "w", encoding="utf-8") as f:
             json.dump(events, f, ensure_ascii=False, indent=2)
-        print("אירועים נשמרו לתזכורות")
+        print("✅ אירועים נשמרו")
     except Exception as e:
         print(f"שגיאה בשמירה: {e}")
 
@@ -132,19 +120,19 @@ def send_to_telegram(message):
         print(f"Telegram חלק {i+1}:", response.json().get("ok"))
 
 if __name__ == "__main__":
-    print("סורק אירועים כלכליים...")
-    events = fetch_forex_events()
+    today = datetime.now()
+    print(f"היום: {today.strftime('%A')} | weekday: {today.weekday()}")
 
-    if not events:
-        print("לא נמצאו אירועים")
-    else:
-        week_events, next_sunday, next_friday = get_next_week_events(events)
+    # שבת = weekday 5
+    if today.weekday() == 5:
+        print("מצב שבת — שואב אירועים לשבוע הבא...")
+        week_events, next_sunday, next_friday = get_week_events()
 
         if not week_events:
             print("אין אירועים גבוהי השפעה לשבוע הבא")
         else:
-            print(f"נמצאו {len(week_events)} אירועים לשבוע הבא")
-            save_events_for_reminders(week_events)
+            print(f"נמצאו {len(week_events)} אירועים")
+            save_events(week_events)
 
             header = f"""📅 אירועים כלכליים חשובים
 שבוע {get_hebrew_date(next_sunday)} עד {get_hebrew_date(next_friday)}
@@ -152,8 +140,7 @@ if __name__ == "__main__":
 ━━━━━━━━━━━━━━━
 
 """
-            analysis = analyze_events(week_events)
-
+            analysis = analyze_week_events(week_events)
             signature = """
 
 ━━━━━━━━━━━━━━━
@@ -161,6 +148,8 @@ if __name__ == "__main__":
 📊 ניתוח אירועים כלכליים שבועי
 ⚠️ האמור אינו מהווה ייעוץ השקעות"""
 
-            full_message = header + analysis + signature
-            send_to_telegram(full_message)
+            send_to_telegram(header + analysis + signature)
             print("נשלח בהצלחה!")
+    else:
+        print("לא שבת — הקובץ הזה רץ רק בשבת")
+        print("התזכורות מנוהלות על ידי forex_reminder.py")
